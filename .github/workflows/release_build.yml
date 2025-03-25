@@ -94,5 +94,5 @@ jobs:
         should_fail: ${{ inputs.test_should_fail }}
         should_timeout: ${{ inputs.test_should_timeout }}
       secrets:
-        app_id: ${{ secrets.FLECS_WORKFLOW_AUTOMATION_CLIENT_ID }}
-        private_key: ${{ secrets.FLECS_WORKFLOW_AUTOMATION_KEY  }}
+        app_id: ${{ secrets.app_id }}
+        private_key: ${{ secrets.private_key  }}
