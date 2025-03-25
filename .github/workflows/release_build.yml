@@ -1,0 +1,98 @@
+name: Create build release
+on:
+  workflow_call:
+    inputs:
+      env_build_version:
+        required: true
+        type: string
+      env_build_branch:
+        required: false
+        type: string
+        default: main
+      should_fail:
+        description: simulate failure of workflow
+        required: false
+        type: string
+      should_timeout:
+        description: simulation timeout of workflow
+        required: false
+        type: string
+    secrets:
+      app_id:
+        required: true
+      private_key:
+        required: true
+jobs:
+  create_release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create GitHub App installation access token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.app_id }}
+          private-key: ${{ secrets.private_key }}
+          owner: FLECS-Technologies
+          repositories: flecs-build-dummy
+      - name: Create build release
+        uses: octokit/request-action@v2.x
+        with:
+          route: POST /repos/{owner}/{app}/releases
+          owner: FLECS-Technologies
+          app: flecs-build-dummy
+          data: >
+            {
+              "tag_name": "${{ inputs.env_build_version }}",
+              "target_commitish": ${{ inputs.env_build_branch }},
+              "name":"${{ inputs.env_build_version }}",
+              "body":"Automated dummy release",
+              "draft": false,
+              "prerelease": false,
+              "message": "automated tag creation",
+              "generate_release_notes":true,
+            }
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+      - name: Check build release
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          OWNER: FLECS-Technologies
+          REPO: flecs-build-dummy
+          TAG: ${{ inputs.env_build_version }}
+        run: |
+          for i in {1..10}; do
+            echo "Checking if release $TAG exists"
+            RELEASE_EXISTS=$(gh api repos/$OWNER/$REPO/releases --jq ".[] | select(.tag_name == \"$TAG\") | .id")
+            if [ "$RELEASE_EXISTS" -gt 0 ]; then
+              echo "Release $TAG found!"
+              exit 0
+            fi
+            echo "Release not found, retrying in 5s"
+            sleep 5
+          done
+          echo "Timed out waiting for release $TAG."
+          exit 1
+      - name: Simulate timeout
+        if: inputs.should_timeout == 'true'
+        run: |
+          echo "Simulating timeout..."
+          while true; do
+            echo "Hanging indefinitely..."
+            sleep 60
+          done
+      - name: Simulate failure
+        if: inputs.should_fail == 'true'
+        run: |
+          echo "Simulating failure..."
+          exit 1
+  release_public:
+      uses: FLECS-Technologies/flecs-public-dummy/.github/workflows/release_public.yml@main
+      needs: [create_release]
+      with:
+        env_public_version: ${{ inputs.build_version }}
+        env_public_branch: ${{ inputs.build_branch }}
+        should_fail: ${{ inputs.test_should_fail }}
+        should_timeout: ${{ inputs.test_should_timeout }}
+      secrets:
+        app_id: ${{ secrets.FLECS_WORKFLOW_AUTOMATION_CLIENT_ID }}
+        private_key: ${{ secrets.FLECS_WORKFLOW_AUTOMATION_KEY  }}
